@@ -1,0 +1,185 @@
+# OpenCPN Android Docker 构建要求
+
+## 📋 系统要求
+
+### 必需软件
+- Docker Desktop 4.0+ 或 Docker Engine 20.10+
+- Git 2.25+
+- 至少8GB可用磁盘空间
+- 稳定的互联网连接
+
+### 推荐配置
+- 内存: 8GB+ RAM
+- CPU: 4核心+
+- 存储: SSD硬盘 (提升构建速度)
+- 网络: 宽带连接 (下载依赖库)
+
+## 📦 依赖文件
+
+### OpenCPN源码中必须包含
+```
+OpenCPN-master_new/
+├── wxlib/                    # 🔥 wxQt预编译库 (必需)
+│   ├── include/wx-3.1/      # wxWidgets 3.1头文件
+│   │   └── wx/              # API头文件
+│   ├── lib/                  # 预编译库文件
+│   │   ├── libwx_*.a       # 22个wxWidgets静态库 (关键)
+│   │   │   ├── libwx_baseu-3.1-armv7a-linux-androideabi28.a      # 基础库
+│   │   │   ├── libwx_qtu_core-3.1-armv7a-linux-androideabi28.a    # GUI核心
+│   │   │   ├── libwx_qtu_gl-3.1-armv7a-linux-androideabi28.a      # OpenGL支持
+│   │   │   └── ... (其他19个库文件)
+│   │   └── libQt5*.so      # Qt5.15 Android动态库
+│   │       ├── libQt5Core.so    # Qt核心
+│   │       ├── libQt5Gui.so     # Qt GUI
+│   │       └── libQt5Widgets.so # Qt控件
+│   ├── bin/                  # 配置工具
+│   │   └── wx-config         # wxWidgets配置脚本
+│   └── ...                   # 其他支持文件
+├── buildandroid/            # Android构建配置
+├── CMakeLists.txt          # 主CMake配置
+├── plugins/                 # 插件源码
+└── ...                      # 其他OpenCPN文件
+```
+
+### ⚠️ wxlib依赖重要性
+**wxlib是构建成功的决定性因素**：
+
+**为什么wxlib不可替代？**
+- OpenCPN Android版本硬编码依赖特定的wxQt版本
+- wxQt从源码编译需要2-4小时，且极易失败
+- 版本兼容性问题复杂 (wxWidgets + Qt5 + Android NDK)
+- 预编译库已经过充分测试和优化
+
+**wxlib文件验证**：
+```bash
+# 关键验证命令
+find wxlib/lib -name "libwx_*.a" | wc -l          # 必须是22
+find wxlib/lib -name "libQt5*.so" | wc -l         # 必须>0
+find wxlib/include/wx-3.1/wx -name "*.h" | wc -l   # 必须>100
+file wxlib/lib/libwx_baseu-3.1*.a | grep ARM        # 必须是ARM架构
+```
+
+**如果wxlib有问题**：
+- ❌ 构建将完全失败
+- ❌ 无法通过修改CMake配置解决
+- ✅ 必须重新获取包含正确wxlib的OpenCPN源码
+- ✅ 参考 `WXLIB_GUIDE.md` 获取详细修复指南
+
+### 关键依赖库版本
+- **wxWidgets**: 3.1 (预编译)
+- **Qt5**: 5.15 (Android ARMv7)
+- **Android NDK**: 25.1.8937393
+- **CMake**: 3.22.1
+- **编译器**: Clang 14.0.6 (Android NDK)
+
+## ⚠️ 重要限制
+
+### 架构限制
+- **仅支持ARMv7 (armeabi-v7a)**
+- **不支持ARM64** (需要ARM64版本的wxlib)
+- **不支持x86/x86_64** (仅移动设备架构)
+
+### 系统限制
+- 需要 **Linux容器支持**
+- 需要 **Docker运行权限**
+- 需要 **网络访问权限** (下载依赖库)
+
+## 🔧 可选配置
+
+### 环境变量
+```bash
+# 自定义构建并行度 (可选)
+export BUILD_PARALLEL=$(nproc)
+
+# 自定义Docker镜像标签 (可选)
+export DOCKER_IMAGE_TAG=opencpn-android:custom
+```
+
+### 代理配置
+```bash
+# HTTP代理 (如果需要)
+export HTTP_PROXY=http://proxy.company.com:8080
+export HTTPS_PROXY=http://proxy.company.com:8080
+
+# Docker代理 (配置Docker Desktop)
+# Settings > Resources > Proxies
+```
+
+## 📊 资源使用
+
+### 构建过程资源占用
+- **内存使用**: 4-8GB (峰值)
+- **磁盘使用**: 8-10GB (Docker镜像 + 构建文件)
+- **网络使用**: 1-3GB (下载依赖)
+- **CPU使用**: 2-8核心 (取决于并行度)
+
+### 最终产物大小
+- **库文件总大小**: ~214MB
+- **主程序库**: 204MB
+- **插件库**: ~10MB
+- **Docker镜像**: 3.14GB (可重用)
+
+## 🚨 常见问题预防
+
+### 网络问题
+- 确保可以访问 `dl.google.com` (Android NDK)
+- 企业网络可能需要配置代理
+
+### 权限问题
+- Linux: 确保用户在docker组中
+- macOS/Windows: 确保Docker Desktop有足够权限
+- 避免在受保护的系统目录中构建
+
+### 空间问题
+- 定期清理Docker: `docker system prune -a`
+- 删除构建缓存: `rm -rf build_android/`
+- 监控磁盘空间: `df -h`
+
+## 📞 故障排除清单
+
+在开始构建前，请确认：
+
+□ [ ] Docker已安装并运行
+□ [ ] 有至少8GB可用空间
+□ [ ] 网络连接稳定
+□ [ ] **wxlib目录存在** - 构建的关键依赖
+□ [ ] **wxlib完整性检查通过**:
+  □ [ ] wxWidgets库文件: 22个 (`find wxlib/lib -name "libwx_*.a" | wc -l`)
+  □ [ ] Qt5库文件: 至少5个 (`find wxlib/lib -name "libQt5*.so" | wc -l`)
+  □ [ ] 头文件充足: 至少100个 (`find wxlib/include/wx-3.1/wx -name "*.h" | wc -l`)
+  □ [ ] 架构正确: ARMv7 (`file wxlib/lib/libwx_baseu-3.1*.a | grep ARM`)
+□ [ ] 当前用户有Docker权限
+□ [ ] 没有防火墙阻止Docker
+□ [ ] 系统时钟准确
+□ [ ] 防病毒软件不阻止Docker
+
+**❌ 如果wxlib检查失败**：
+1. 立即停止构建过程
+2. 参考 `WXLIB_GUIDE.md` 获取详细修复方案
+3. 重新获取包含正确wxlib的OpenCPN源码
+4. 再次运行完整性检查
+
+## 🎯 构建目标
+
+此构建包的目标是：
+- ✅ 编译OpenCPN Android库文件
+- ✅ 生成ARMv7架构的.so文件
+- ✅ 提供完整的构建环境
+- ✅ 生成可集成到其他Android项目的库文件
+
+## 📦 构建产物
+
+构建完成后将生成：
+```
+android_libs/
+└── armeabi-v7a/
+    ├── libgorp.so           # 主程序库 (204MB)
+    ├── libchartdldr_pi.so   # 海图插件 (3.8MB)
+    ├── libdashboard_pi.so   # 仪表板插件 (840KB)
+    ├── libgrib_pi.so        # 天气插件 (1.2MB)
+    ├── libwmm_pi.so         # 地磁插件 (4.5MB)
+    ├── libUNARR.so          # 压缩库 (388KB)
+    └── MANIFEST.txt         # 构建清单
+```
+
+如所有项目都已确认，可以开始构建！

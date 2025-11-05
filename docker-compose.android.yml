@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  opencpn-android-builder:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.android
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: opencpn-android-builder:latest
+    container_name: opencpn-android-build
+    volumes:
+      - ..:/src:Z
+      - android-build-cache:/opt/android-cache
+    working_dir: /src
+    environment:
+      - ANDROID_SDK_ROOT=/opt/android-sdk
+      - ANDROID_NDK_ROOT=/opt/android-sdk/ndk/22.1.7171670
+      - CMAKE_PREFIX_PATH=/src/wxlib
+      - OCPN_TARGET_TUPLE=Android-armhf;16;armhf
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+volumes:
+  android-build-cache:
+    driver: local

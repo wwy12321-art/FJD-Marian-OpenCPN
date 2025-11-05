@@ -1,0 +1,105 @@
+# OpenCPN Android Builder
+# Multi-stage build for Android cross-compilation environment
+
+FROM --platform=linux/amd64 ubuntu:22.04
+
+# Set non-interactive frontend
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install basic dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    wget \
+    curl \
+    unzip \
+    python3 \
+    python3-pip \
+    pkg-config \
+    openjdk-11-jdk \
+    gettext \
+    libpthread-stubs0-dev \
+    libgl1-mesa-dev \
+    libglu1-mesa-dev \
+    libssl-dev \
+    zlib1g-dev \
+    libbz2-dev \
+    libjpeg-dev \
+    libsqlite3-dev \
+    liblz4-dev \
+    liblzma-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Android SDK
+RUN mkdir -p /opt/android-sdk && \
+    cd /tmp && \
+    wget --progress=bar:force https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip && \
+    unzip commandlinetools-linux-9477386_latest.zip && \
+    mkdir -p /opt/android-sdk/cmdline-tools/latest && \
+    mv cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/ && \
+    rm commandlinetools-linux-9477386_latest.zip
+
+# Set Android SDK environment
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin
+
+# Install Android SDK components
+RUN export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java)))) && \
+    yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
+    "platforms;android-21" \
+    "platforms;android-33" \
+    "build-tools;33.0.0" \
+    "ndk;25.1.8937393"
+
+# Set Android NDK environment
+ENV ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/25.1.8937393
+ENV ANDROID_NDK_HOME=$ANDROID_NDK_ROOT
+
+# Note: Qt and wxQt are provided by the project's wxlib directory
+# No need to compile from source, using pre-compiled Android libraries
+
+# Create build directory
+RUN mkdir -p /src
+WORKDIR /src
+
+# Set environment variables for OpenCPN build (using ARMv7 since wxlib provides ARMv7 libraries)
+ENV CC=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang
+ENV CXX=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang++
+ENV AR=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+ENV CMAKE_PREFIX_PATH=/src/wxlib
+ENV OCPN_TARGET_TUPLE=Android-armhf;16;armhf
+
+# Add build script
+COPY <<EOF /build-android.sh
+#!/bin/bash
+set -e
+
+echo "OpenCPN Android Build Environment Ready!"
+echo "Android SDK: \$ANDROID_SDK_ROOT"
+echo "Android NDK: \$ANDROID_NDK_ROOT"
+echo "Using project wxlib: /src/wxlib"
+echo "Target architecture: ARMv7 (armeabi-v7a)"
+
+# Create build directory
+mkdir -p build_android
+cd build_android
+
+# Configure OpenCPN for Android (using ARMv7 to match wxlib libraries)
+cmake -DOCPN_TARGET_TUPLE:STRING="Android-armhf;16;armhf" \
+      -DCMAKE_TOOLCHAIN_FILE=../buildandroid/build_android.cmake \
+      -Dtool_base=$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64 \
+      -DCMAKE_PREFIX_PATH=/src/wxlib \
+      ..
+
+# Build
+make -j\$(nproc)
+
+echo "Build completed! APK should be in build_android/ directory."
+EOF
+
+RUN chmod +x /build-android.sh
+
+# Default command
+CMD ["/bin/bash"]

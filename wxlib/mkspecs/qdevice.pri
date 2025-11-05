@@ -1,0 +1,7 @@
+DEFAULT_ANDROID_SDK_ROOT = /home/vinson-shen/Android/Sdk
+DEFAULT_ANDROID_NDK_ROOT = /home/vinson-shen/work/share/android-ndk-r19c-linux-x86_64/android-ndk-r19c
+DEFAULT_ANDROID_PLATFORM = android-28
+DEFAULT_ANDROID_NDK_HOST = linux-x86_64
+DEFAULT_ANDROID_TARGET_ARCH = armeabi-v7a
+DEFAULT_ANDROID_NDK_TOOLCHAIN_VERSION = 4.9
+GCC_MACHINE_DUMP = 
